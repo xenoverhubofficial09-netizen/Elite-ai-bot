@@ -24,7 +24,7 @@ function getGroqClient() {
 async function queryGroq(question) {
   const client = getGroqClient();
 
-  const model = process.env.GROQ_MODEL || 'llama3-8b-8192';
+  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
   const maxTokens = parseInt(process.env.AI_MAX_TOKENS, 10) || 1024;
   const temperature = parseFloat(process.env.AI_TEMPERATURE) || 0.7;
 
