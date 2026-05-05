@@ -18,7 +18,7 @@ for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     logger.error(`[STARTUP ERROR] Missing environment variable: ${envVar}`);
     // Only exit on critical bot variables
-    if (envVar === 'DISCORD_TOKEN' || envVar === 'ADMIN_KEY') {
+    if (envVar === 'DISCORD_TOKEN') {
        process.exit(1);
     }
   }
@@ -32,8 +32,6 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
-app.set('discordClient', client);
-
 // Attach collections to client
 client.commands = new Collection();
 client.cooldowns = new Collection();

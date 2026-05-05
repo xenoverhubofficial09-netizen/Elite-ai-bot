@@ -18,6 +18,7 @@ function startDashboard(client) {
 
   app.use(cors());
   app.use(express.json());
+  app.set('discordClient', client);
   
   const publicPath = path.join(__dirname, 'public');
   logger.info(`[DASHBOARD] Serving static assets from: ${publicPath}`);
