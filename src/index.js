@@ -24,6 +24,7 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+// Initialize Discord Client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -31,6 +32,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
+app.set('discordClient', client);
 
 // Attach collections to client
 client.commands = new Collection();

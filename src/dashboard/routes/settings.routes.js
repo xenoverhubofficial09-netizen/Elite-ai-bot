@@ -22,4 +22,17 @@ router.post('/toggle', authMiddleware, (req, res) => {
   res.json(result);
 });
 
+/**
+ * GET /api/settings/guilds
+ * Returns list of guilds the bot is in (to verify access).
+ */
+router.get('/guilds', authMiddleware, (req, res) => {
+  const guilds = req.app.get('discordClient').guilds.cache.map(g => ({
+    id: g.id,
+    name: g.name,
+    icon: g.iconURL()
+  }));
+  res.json(guilds);
+});
+
 module.exports = router;
