@@ -29,7 +29,6 @@
   let currentGuildId = null;
   let guildsData     = [];
 
-  // ─── Init ──────────────────────────────────────────────
   init();
 
   function init() {
@@ -69,7 +68,7 @@
   }
 
   async function loadDashboard() {
-    guildsData = await api('/api/settings/guilds'); // Simple endpoint to verify key
+    guildsData = await api('/api/settings/guilds');
     showScreen('dashboard');
     userAvatar.src = 'https://cdn.discordapp.com/embed/avatars/0.png';
     userName.textContent = 'Elite Admin';
@@ -85,6 +84,81 @@
       guildSelect.appendChild(opt);
     });
   }
+
+  guildSelect.addEventListener('change', () => selectGuild(guildSelect.value));
+
+  async function selectGuild(guildId) {
+    currentGuildId = guildId;
+    const guild = guildsData.find(g => g.id === guildId);
+    guildNameDisplay.textContent = guild ? guild.name : 'Unknown';
+    aiToggleBtn.disabled = false;
+    
+    await Promise.all([
+      loadChannels(guildId),
+      loadRoles(guildId),
+      loadSettings()
+    ]);
+  }
+
+  async function loadChannels(guildId) {
+    try {
+      const channels = await api(`/api/settings/${guildId}/channels`);
+      const dropdowns = $$('.channel-select');
+      dropdowns.forEach(dd => {
+        dd.innerHTML = '<option value="" disabled selected>------- SELECT CHANNEL -------</option>';
+        channels.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `# ${c.name}`;
+          dd.appendChild(opt);
+        });
+      });
+    } catch (e) {
+      toast('Failed to load channels', 'error');
+    }
+  }
+
+  async function loadRoles(guildId) {
+    try {
+      const roles = await api(`/api/settings/${guildId}/roles`);
+      const container = $('.roles-list-container');
+      container.innerHTML = '';
+      roles.forEach(role => {
+        const div = document.createElement('div');
+        div.className = 'role-item';
+        div.innerHTML = `
+          <input type="checkbox" id="role-${role.id}" value="${role.id}">
+          <label for="role-${role.id}">${role.name}</label>
+        `;
+        container.appendChild(div);
+      });
+    } catch (e) {
+      toast('Failed to load roles', 'error');
+    }
+  }
+
+  async function loadSettings() {
+    if (!currentGuildId) return;
+    const data = await api(`/api/settings?guildId=${currentGuildId}`);
+    setAIState(data.aiEnabled);
+  }
+
+  function setAIState(enabled) {
+    aiToggleBtn.classList.toggle('active', enabled);
+    aiStatusLabel.textContent = enabled ? 'AI Status: Online' : 'AI Status: Offline';
+    aiStatusLabel.className = 'ai-status-label ' + (enabled ? 'on' : 'off');
+  }
+
+  aiToggleBtn.addEventListener('click', async () => {
+    if (!currentGuildId) return;
+    try {
+      const data = await api('/api/settings/toggle', { method: 'POST', body: { guildId: currentGuildId } });
+      setAIState(data.aiEnabled);
+      toast(data.aiEnabled ? 'AI Activated' : 'AI Deactivated', 'success');
+    } catch (e) {
+      toast('Toggle failed', 'error');
+    }
+  });
 
   async function api(url, opts = {}) {
     const key = localStorage.getItem('admin_key');
@@ -103,7 +177,6 @@
     return data;
   }
 
-  // Simplified UI Logic
   navItems.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-tab');
