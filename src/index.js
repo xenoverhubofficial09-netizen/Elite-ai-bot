@@ -3,15 +3,24 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { loadCommands } = require('./handlers/commandHandler');
 const { loadEvents } = require('./handlers/eventHandler');
-const { startKeepAlive } = require('./utils/keepAlive');
+const { startDashboard } = require('./dashboard/server');
+const { init: initPanelService } = require('./services/panelService');
 const logger = require('./utils/logger');
 
 // Validate required environment variables
-const requiredEnvVars = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'GROQ_API_KEY'];
+const requiredEnvVars = [
+  'DISCORD_TOKEN',
+  'CLIENT_ID',
+  'GROQ_API_KEY',
+  'ADMIN_KEY'
+];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
-    logger.error(`Missing required environment variable: ${envVar}`);
-    process.exit(1);
+    logger.error(`[STARTUP ERROR] Missing environment variable: ${envVar}`);
+    // Only exit on critical bot variables
+    if (envVar === 'DISCORD_TOKEN' || envVar === 'ADMIN_KEY') {
+       process.exit(1);
+    }
   }
 }
 
@@ -19,7 +28,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // Required to read message text
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -31,16 +40,20 @@ client.cooldowns = new Collection();
 loadCommands(client);
 loadEvents(client);
 
-// Start keep-alive server for Render
-startKeepAlive();
+// Give panel service access to the Discord client
+initPanelService(client);
+
+// Start the dashboard (Dashboard server IS the HTTP server)
+startDashboard(client);
 
 // Login
 client.login(process.env.DISCORD_TOKEN).catch((err) => {
-  logger.error('Failed to login to Discord:', err.message);
+  logger.error('❌ Failed to login to Discord. Check your DISCORD_TOKEN on Railway!');
+  logger.error(`Error details: ${err.message}`);
   process.exit(1);
 });
 
-// Handle unhandled rejections
+// Global error handlers
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

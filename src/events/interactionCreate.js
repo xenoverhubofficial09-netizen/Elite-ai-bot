@@ -11,6 +11,9 @@ module.exports = {
    * @param {import('discord.js').Client} client
    */
   async execute(interaction, client) {
+    // Ignore bot interactions
+    if (interaction.user.bot) return;
+
     try {
       await handleInteraction(interaction, client);
     } catch (err) {
