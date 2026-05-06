@@ -5,15 +5,22 @@
  * Requires: Authorization: Bearer <ADMIN_KEY>
  */
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const adminKey = process.env.ADMIN_KEY || "elite_secure_123";
-
-  // Expecting format: Bearer YOUR_KEY
-  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== adminKey) {
-    return res.status(403).json({ success: false, message: "Unauthorized: Invalid Bearer Token" });
+  // Check if user is authenticated via Passport session
+  if (req.isAuthenticated()) {
+    return next();
   }
 
-  next();
+  const authHeader = req.headers['authorization'];
+  console.warn(`[AUTH] Unauthorized API access attempt to ${req.originalUrl}. AuthHeader: ${authHeader ? 'Present' : 'Missing'}`);
+
+  // Fallback for ADMIN_KEY
+  const adminKey = process.env.ADMIN_KEY || "elite_secure_123";
+  if (authHeader && authHeader.startsWith('Bearer ') && authHeader.split(' ')[1] === adminKey) {
+    console.log('[AUTH] Authorized via legacy ADMIN_KEY');
+    return next();
+  }
+
+  return res.status(403).json({ success: false, message: "Unauthorized: Please login with Discord" });
 }
 
 module.exports = authMiddleware;

@@ -1,7 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    Elite AI Bot — Dashboard Client Logic
-   Manual Admin Key Login · Secure Bearer Auth
+   Manual Admin Key Login · Secure Bearer Auth · Embed Builder
    ═══════════════════════════════════════════════════════════ */
+
+'use strict';
 
 'use strict';
 
@@ -12,8 +14,6 @@
   const loginScreen       = $('#login-screen');
   const dashScreen        = $('#dashboard-screen');
   const loginError        = $('#login-error');
-  const adminKeyInput     = $('#admin-key-input');
-  const loginBtnManual    = $('#login-btn-manual');
 
   const userAvatar        = $('#user-avatar');
   const userName          = $('#user-name');
@@ -24,55 +24,53 @@
   const aiToggleBtn       = $('#ai-toggle-btn');
   const aiStatusLabel     = $('#ai-status-label');
   const embedForm         = $('#embed-form');
+  const addButtonRow      = $('#add-button-row');
+  const buttonsContainer  = $('#buttons-container');
   const toastContainer    = $('#toast-container');
+  
+  const lockBtn           = $('#lock-btn');
+  const clearBtn          = $('#clear-btn');
 
   let currentGuildId = null;
   let guildsData     = [];
 
   init();
 
-  function init() {
-    if (localStorage.getItem('admin_key')) {
-      loadDashboard();
-    } else {
+  async function init() {
+    try {
+      const res = await fetch('/auth/user');
+      const data = await res.json();
+      
+      if (data.authenticated) {
+        await loadDashboard(data.user);
+      } else {
+        showScreen('login');
+      }
+    } catch (e) {
       showScreen('login');
     }
   }
-
-  loginBtnManual.addEventListener('click', async () => {
-    const key = adminKeyInput.value.trim();
-    if (!key) return showLoginError('Admin Key is required');
-    
-    localStorage.setItem('admin_key', key);
-    loginBtnManual.disabled = true;
-    loginBtnManual.textContent = 'Verifying...';
-
-    try {
-      await loadDashboard();
-    } catch (e) {
-      localStorage.removeItem('admin_key');
-      showLoginError('Invalid Key or Connection Error');
-      loginBtnManual.disabled = false;
-      loginBtnManual.textContent = 'Unlock Dashboard';
-    }
-  });
 
   function showScreen(name) {
     loginScreen.classList.toggle('active', name === 'login');
     dashScreen.classList.toggle('active', name === 'dashboard');
   }
 
-  function showLoginError(msg) {
-    loginError.textContent = msg;
-    loginError.classList.remove('hidden');
-  }
-
-  async function loadDashboard() {
-    guildsData = await api('/api/settings/guilds');
-    showScreen('dashboard');
-    userAvatar.src = 'https://cdn.discordapp.com/embed/avatars/0.png';
-    userName.textContent = 'Elite Admin';
-    populateGuildSelect(guildsData);
+  async function loadDashboard(user) {
+    try {
+      guildsData = await api('/api/settings/guilds');
+      showScreen('dashboard');
+      
+      if (user) {
+        userAvatar.src = user.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
+        userName.textContent = user.global_name || user.username;
+      }
+      
+      populateGuildSelect(guildsData);
+    } catch (e) {
+      console.error('Dashboard load failed', e);
+      showScreen('login');
+    }
   }
 
   function populateGuildSelect(guilds) {
@@ -83,6 +81,12 @@
       opt.textContent = g.name;
       guildSelect.appendChild(opt);
     });
+    
+    // Auto-select if only 1 guild
+    if (guilds.length === 1) {
+      guildSelect.value = guilds[0].id;
+      selectGuild(guilds[0].id);
+    }
   }
 
   guildSelect.addEventListener('change', () => selectGuild(guildSelect.value));
@@ -127,7 +131,7 @@
         const div = document.createElement('div');
         div.className = 'role-item';
         div.innerHTML = `
-          <input type="checkbox" id="role-${role.id}" value="${role.id}">
+          <input type="checkbox" class="role-checkbox" id="role-${role.id}" value="${role.id}">
           <label for="role-${role.id}">${role.name}</label>
         `;
         container.appendChild(div);
@@ -160,20 +164,118 @@
     }
   });
 
+  // ─── Panel Actions ───────────────────────────────────
+
+  // 1. Send Embed
+  addButtonRow.addEventListener('click', () => {
+    if (buttonsContainer.children.length >= 5) return toast('Max 5 buttons allowed', 'error');
+    const div = document.createElement('div');
+    div.className = 'button-config-row';
+    div.innerHTML = `
+      <input type="text" placeholder="Label" class="btn-label">
+      <input type="url" placeholder="URL" class="btn-url">
+      <button type="button" class="btn-remove">×</button>
+    `;
+    div.querySelector('.btn-remove').onclick = () => div.remove();
+    buttonsContainer.appendChild(div);
+  });
+
+  embedForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentGuildId) return toast('Select a server first', 'error');
+    
+    const channelId = $('#embed-channel').value;
+    const title = $('#embed-title').value;
+    const description = $('#embed-desc').value;
+    const color = $('#embed-color').value;
+
+    if (!channelId) return toast('Select a channel', 'error');
+
+    const buttons = [];
+    $$('.button-config-row').forEach(row => {
+      const label = row.querySelector('.btn-label').value;
+      const url = row.querySelector('.btn-url').value;
+      if (label && url) buttons.push({ label, url });
+    });
+
+    try {
+      await api('/api/panel/send', {
+        method: 'POST',
+        body: { guildId: currentGuildId, channelId, title, description, color, buttons }
+      });
+      toast('Embed added to queue!', 'success');
+      embedForm.reset();
+      buttonsContainer.innerHTML = '';
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  });
+
+  // 2. Lock Channel
+  lockBtn.addEventListener('click', async () => {
+    if (!currentGuildId) return toast('Select a server first', 'error');
+    const channelId = $('#card-lock .channel-select').value;
+    const selectedRoles = Array.from($$('.role-checkbox:checked')).map(cb => cb.value);
+
+    if (!channelId) return toast('Select a channel', 'error');
+    if (selectedRoles.length === 0) return toast('Select at least one role', 'error');
+
+    try {
+      await api('/api/panel/lock', {
+        method: 'POST',
+        body: { channelId, roleIds: selectedRoles }
+      });
+      toast('Permissions updated!', 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  });
+
+  // 3. Clear Chat
+  clearBtn.addEventListener('click', async () => {
+    if (!currentGuildId) return toast('Select a server first', 'error');
+    const channelId = $('#card-clear .channel-select').value;
+
+    if (!channelId) return toast('Select a channel', 'error');
+    if (!confirm('Are you sure you want to clear this channel? All messages will be deleted.')) return;
+
+    try {
+      await api('/api/panel/clear', {
+        method: 'POST',
+        body: { channelId }
+      });
+      toast('Channel cleared successfully!', 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  });
+
+  // ─── API Helper ──────────────────────────────────────
   async function api(url, opts = {}) {
-    const key = localStorage.getItem('admin_key');
     const config = {
       method: opts.method || 'GET',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`
+        'Content-Type': 'application/json'
       }
     };
+    
+    // Fallback for manual key if still using it for some reason
+    const key = localStorage.getItem('admin_key');
+    if (key) {
+      config.headers['Authorization'] = `Bearer ${key}`;
+    }
+
     if (opts.body) config.body = JSON.stringify(opts.body);
 
     const res = await fetch(url, config);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || 'Unauthorized');
+    
+    if (res.status === 401 || res.status === 403) {
+      showScreen('login');
+      throw new Error('Unauthorized');
+    }
+    
+    if (!res.ok) throw new Error(data.message || 'API Error');
     return data;
   }
 
