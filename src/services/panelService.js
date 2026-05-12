@@ -33,7 +33,7 @@ function init(client) {
  * @param {Array<{ label: string, url: string }>} [opts.buttons] - Link buttons (max 5)
  * @returns {Promise<void>}
  */
-async function sendPanel({ channelId, title, description, image, thumbnail, buttons = [] }) {
+async function sendPanel({ channelId, title, description, color, image, thumbnail, buttons = [] }) {
   if (!discordClient) {
     throw new Error('Discord client is not initialized. The bot may still be starting up.');
   }
