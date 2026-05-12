@@ -5,6 +5,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AttachmentBuilder,
 } = require('discord.js');
 const logger = require('../utils/logger');
 
@@ -49,12 +50,25 @@ async function sendPanel({ channelId, title, description, image, thumbnail, butt
   }
 
   const embed = new EmbedBuilder()
-    .setColor(0x6366f1)
+    .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x6366f1)
     .setTimestamp();
 
   if (title)       embed.setTitle(title.slice(0, 256));
   if (description) embed.setDescription(description.slice(0, 4096));
-  if (image)       embed.setImage(image);
+
+  const files = [];
+
+  if (image) {
+    if (typeof image === 'string') {
+      embed.setImage(image);
+    } else if (image.buffer) {
+      // Handle uploaded file
+      const attachment = new AttachmentBuilder(image.buffer, { name: image.name });
+      files.push(attachment);
+      embed.setImage(`attachment://${image.name}`);
+    }
+  }
+
   if (thumbnail)   embed.setThumbnail(thumbnail);
 
   const components = [];
@@ -72,7 +86,7 @@ async function sendPanel({ channelId, title, description, image, thumbnail, butt
     if (row.components.length > 0) components.push(row);
   }
 
-  await channel.send({ embeds: [embed], components });
+  await channel.send({ embeds: [embed], components, files });
   logger.info(`Panel sent to channel ${channelId} (title: "${title || 'no title'}")`);
 }
 

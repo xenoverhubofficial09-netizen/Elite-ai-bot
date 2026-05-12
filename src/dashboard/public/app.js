@@ -189,6 +189,9 @@
     const description = $('#embed-desc').value;
     const color = $('#embed-color').value;
 
+    const fileInput = $('#embed-file-input');
+    const imageFile = fileInput.files[0];
+
     if (!channelId) return toast('Select a channel', 'error');
 
     const buttons = [];
@@ -199,9 +202,21 @@
     });
 
     try {
+      const formData = new FormData();
+      formData.append('guildId', currentGuildId);
+      formData.append('channelId', channelId);
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('color', color);
+      formData.append('buttons', JSON.stringify(buttons));
+      
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
       await api('/api/panel/send', {
         method: 'POST',
-        body: { guildId: currentGuildId, channelId, title, description, color, buttons }
+        body: formData
       });
       toast('Embed added to queue!', 'success');
       embedForm.reset();
@@ -254,10 +269,12 @@
   async function api(url, opts = {}) {
     const config = {
       method: opts.method || 'GET',
-      headers: { 
-        'Content-Type': 'application/json'
-      }
+      headers: {}
     };
+
+    if (!(opts.body instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
     
     // Fallback for manual key if still using it for some reason
     const key = localStorage.getItem('admin_key');
@@ -265,7 +282,9 @@
       config.headers['Authorization'] = `Bearer ${key}`;
     }
 
-    if (opts.body) config.body = JSON.stringify(opts.body);
+    if (opts.body) {
+      config.body = (opts.body instanceof FormData) ? opts.body : JSON.stringify(opts.body);
+    }
 
     const res = await fetch(url, config);
     const data = await res.json().catch(() => ({}));
