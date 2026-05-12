@@ -50,8 +50,18 @@ async function sendPanel({ channelId, title, description, color, image, thumbnai
   }
 
   const embed = new EmbedBuilder()
-    .setColor(color ? parseInt(color.replace('#', ''), 16) : 0x6366f1)
     .setTimestamp();
+
+  try {
+    if (color && typeof color === 'string') {
+      const hex = color.replace('#', '');
+      embed.setColor(parseInt(hex, 16) || 0x6366f1);
+    } else {
+      embed.setColor(0x6366f1);
+    }
+  } catch (e) {
+    embed.setColor(0x6366f1);
+  }
 
   if (title)       embed.setTitle(title.slice(0, 256));
   if (description) embed.setDescription(description.slice(0, 4096));
@@ -63,9 +73,10 @@ async function sendPanel({ channelId, title, description, color, image, thumbnai
       embed.setImage(image);
     } else if (image.buffer) {
       // Handle uploaded file
-      const attachment = new AttachmentBuilder(image.buffer, { name: image.name });
+      const safeName = (image.name || 'image.png').replace(/[^a-zA-Z0-9.]/g, '_');
+      const attachment = new AttachmentBuilder(image.buffer, { name: safeName });
       files.push(attachment);
-      embed.setImage(`attachment://${image.name}`);
+      embed.setImage(`attachment://${safeName}`);
     }
   }
 
@@ -86,7 +97,10 @@ async function sendPanel({ channelId, title, description, color, image, thumbnai
     if (row.components.length > 0) components.push(row);
   }
 
-  await channel.send({ embeds: [embed], components, files });
+  const payload = { embeds: [embed], components };
+  if (files.length > 0) payload.files = files;
+
+  await channel.send(payload);
   logger.info(`Panel sent to channel ${channelId} (title: "${title || 'no title'}")`);
 }
 
